@@ -195,14 +195,20 @@ class TestGestureRecognition(unittest.TestCase):
         self.assertTrue(finger_states.are_four_folded())
 
     def test_wasd_movement_directions(self):
-        # Hand displaced upward: y = 0.30 (anchor is 0.55, dy = -0.25 < -0.14)
+        # When enable_wasd is False (default), move_keys must be empty to prevent accidental presses
+        self.config.gestures.enable_wasd = False
         lms_up = create_synthetic_hand(wrist_xy=(0.50, 0.30), finger_extension=1.0, pinch_distance=0.25)
         hand_up = HandData(detected=True, landmarks_norm=lms_up, palm_center_norm=(0.50, 0.30), palm_scale=0.15)
+        raw_up, _, _, move_up, _, _ = self.recognizer.evaluate_raw(hand_up)
+        self.assertEqual(len(move_up), 0)
+
+        # When enable_wasd is True, directional gestures populate move_keys
+        self.config.gestures.enable_wasd = True
         raw_up, _, _, move_up, _, _ = self.recognizer.evaluate_raw(hand_up)
         self.assertEqual(raw_up, Gesture.MOVE_UP)
         self.assertIn("w", move_up)
 
-        # Hand displaced downward: y = 0.80 (dy = +0.25 > 0.14)
+        # Hand displaced downward: y = 0.80
         lms_down = create_synthetic_hand(wrist_xy=(0.50, 0.80), finger_extension=1.0, pinch_distance=0.25)
         hand_down = HandData(detected=True, landmarks_norm=lms_down, palm_center_norm=(0.50, 0.80), palm_scale=0.15)
         raw_down, _, _, move_down, _, _ = self.recognizer.evaluate_raw(hand_down)

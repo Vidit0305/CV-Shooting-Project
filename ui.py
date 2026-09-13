@@ -193,50 +193,51 @@ class UIRenderer:
         control_state: ControlState,
         controls_enabled: bool,
     ) -> None:
-        """Render floating minimalist key chips in the bottom right corner."""
+        """Render floating minimalist mouse chips in the bottom right corner."""
         h, w = frame.shape[:2]
-        chip_size = 28
-        spacing = 6
-        base_x = w - 190
-        base_y = h - 75
+        chip_h = 28
+        base_x = w - 170
+        base_y = h - 42
 
-        # WASD Layout
-        w_rect = (base_x + chip_size + spacing, base_y - chip_size - spacing, chip_size, chip_size)
-        a_rect = (base_x, base_y, chip_size, chip_size)
-        s_rect = (base_x + chip_size + spacing, base_y, chip_size, chip_size)
-        d_rect = (base_x + (chip_size + spacing) * 2, base_y, chip_size, chip_size)
-
-        keys_map = [
-            ("W", w_rect, "w" in control_state.move_keys),
-            ("A", a_rect, "a" in control_state.move_keys),
-            ("S", s_rect, "s" in control_state.move_keys),
-            ("D", d_rect, "d" in control_state.move_keys),
-        ]
-
-        for label, (rx, ry, rw, rh), is_down in keys_map:
-            bg_col = self.COLOR_GREEN if is_down else (25, 25, 35)
-            txt_col = (10, 10, 14) if is_down else self.COLOR_MUTED
-            self._draw_capsule(frame, rx, ry, rw, rh, bg_color=bg_col, alpha=0.85 if is_down else 0.50)
-            cv2.putText(frame, label, (rx + 8, ry + 19), cv2.FONT_HERSHEY_DUPLEX, 0.40, txt_col, 1, cv2.LINE_AA)
+        # Optional WASD if explicitly enabled
+        if getattr(self.config.gestures, "enable_wasd", False):
+            base_x = w - 210
+            base_y = h - 75
+            chip_size = 28
+            spacing = 6
+            w_rect = (base_x + chip_size + spacing, base_y - chip_size - spacing, chip_size, chip_size)
+            a_rect = (base_x, base_y, chip_size, chip_size)
+            s_rect = (base_x + chip_size + spacing, base_y, chip_size, chip_size)
+            d_rect = (base_x + (chip_size + spacing) * 2, base_y, chip_size, chip_size)
+            keys_map = [
+                ("W", w_rect, "w" in control_state.move_keys),
+                ("A", a_rect, "a" in control_state.move_keys),
+                ("S", s_rect, "s" in control_state.move_keys),
+                ("D", d_rect, "d" in control_state.move_keys),
+            ]
+            for label, (rx, ry, rw, rh), is_down in keys_map:
+                bg_col = self.COLOR_GREEN if is_down else (25, 25, 35)
+                txt_col = (10, 10, 14) if is_down else self.COLOR_MUTED
+                self._draw_capsule(frame, rx, ry, rw, rh, bg_color=bg_col, alpha=0.85 if is_down else 0.50)
+                cv2.putText(frame, label, (rx + 8, ry + 19), cv2.FONT_HERSHEY_DUPLEX, 0.40, txt_col, 1, cv2.LINE_AA)
 
         # Mouse Chips (LMB / RMB)
-        mouse_x = base_x + (chip_size + spacing) * 3 + 12
-        lmb_rect = (mouse_x, base_y - chip_size - spacing, 46, chip_size)
-        rmb_rect = (mouse_x, base_y, 46, chip_size)
+        lmb_rect = (base_x, base_y, 72, chip_h)
+        rmb_rect = (base_x + 80, base_y, 72, chip_h)
 
         # LMB (Shoot)
         lmb_down = control_state.shoot
         lmb_bg = self.COLOR_RED if lmb_down else (25, 25, 35)
         lmb_txt = self.COLOR_WHITE if lmb_down else self.COLOR_MUTED
         self._draw_capsule(frame, lmb_rect[0], lmb_rect[1], lmb_rect[2], lmb_rect[3], bg_color=lmb_bg, alpha=0.9 if lmb_down else 0.5)
-        cv2.putText(frame, "LMB", (mouse_x + 8, lmb_rect[1] + 19), cv2.FONT_HERSHEY_DUPLEX, 0.38, lmb_txt, 1, cv2.LINE_AA)
+        cv2.putText(frame, "SHOOT", (lmb_rect[0] + 12, lmb_rect[1] + 19), cv2.FONT_HERSHEY_DUPLEX, 0.36, lmb_txt, 1, cv2.LINE_AA)
 
         # RMB (Aim)
         rmb_down = control_state.aim
         rmb_bg = self.COLOR_BLUE if rmb_down else (25, 25, 35)
         rmb_txt = self.COLOR_WHITE if rmb_down else self.COLOR_MUTED
         self._draw_capsule(frame, rmb_rect[0], rmb_rect[1], rmb_rect[2], rmb_rect[3], bg_color=rmb_bg, alpha=0.9 if rmb_down else 0.5)
-        cv2.putText(frame, "RMB", (mouse_x + 8, rmb_rect[1] + 19), cv2.FONT_HERSHEY_DUPLEX, 0.38, rmb_txt, 1, cv2.LINE_AA)
+        cv2.putText(frame, "AIM", (rmb_rect[0] + 20, rmb_rect[1] + 19), cv2.FONT_HERSHEY_DUPLEX, 0.36, rmb_txt, 1, cv2.LINE_AA)
 
     def _draw_debug_metrics(
         self,

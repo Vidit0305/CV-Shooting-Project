@@ -17,6 +17,7 @@
         "smoothing_factor": 0.40
     },
     "gestures": {
+        "enable_wasd": false,
         "pinch_on_ratio": 0.52,
         "pinch_off_ratio": 0.65,
         "fist_fold_ratio": 0.88,
@@ -41,11 +42,12 @@
         "controls_enabled_by_default": true,
         "mouse_look": {
             "enabled": true,
-            "sensitivity_x": 1400.0,
-            "sensitivity_y": 1100.0,
-            "deadzone": 0.002,
-            "smoothing": 0.60,
-            "ads_multiplier": 0.50
+            "sensitivity_x": 4800.0,
+            "sensitivity_y": 3800.0,
+            "deadzone": 0.001,
+            "smoothing": 0.25,
+            "ads_multiplier": 0.50,
+            "acceleration": 1.50
         }
     },
     "ui": {

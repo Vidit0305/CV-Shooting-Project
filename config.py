@@ -41,21 +41,25 @@ class TrackingConfig:
 class MouseLookConfig:
     """Settings for moving the screen / in-game camera look via hand motion."""
     enabled: bool = True
-    # Sensitivity multipliers: scale normalized hand delta to screen mouse pixels
-    sensitivity_x: float = 1400.0
-    sensitivity_y: float = 1100.0
-    # Minimum normalized displacement delta to ignore hand tremor / micro-jitter
-    deadzone: float = 0.002
-    # Exponential smoothing factor for mouse velocity (0.0 = raw, 0.8 = ultra smooth)
-    smoothing: float = 0.60
+    # High-speed sensitivity multipliers for 3D FPS camera rotation
+    sensitivity_x: float = 4800.0
+    sensitivity_y: float = 3800.0
+    # Minimum normalized displacement delta (low deadzone for instant response)
+    deadzone: float = 0.001
+    # Snappy exponential smoothing factor (0.25 = instantaneous, zero sluggish drag)
+    smoothing: float = 0.25
     # Sensitivity factor when Aiming Down Sights (FIST pose) for precision shooting
     ads_multiplier: float = 0.50
+    # Velocity acceleration multiplier for fast turns
+    acceleration: float = 1.50
 
 
 @dataclass
 class GestureConfig:
+    # Set to False as requested so accidental S and D keys are never pressed
+    enable_wasd: bool = False
+
     # Pinch thresholds (normalized distance: thumb_tip to index_tip / palm_scale)
-    # 0.52 triggers effortlessly on natural pinch; 0.65 releases when open
     pinch_on_ratio: float = 0.52
     pinch_off_ratio: float = 0.65
 

@@ -202,26 +202,28 @@ class GestureRecognizer:
         # 2. Check Fist (Aim)
         is_fist_pose = self.is_fist(lms, finger_states, scale)
 
-        # 3. Movement displacement relative to neutral anchor
-        anchor_x = self.config.calibration.neutral_center_x
-        anchor_y = self.config.calibration.neutral_center_y
-        hand_x, hand_y = hand_data.palm_center_norm
-
-        dx = hand_x - anchor_x
-        dy = hand_y - anchor_y
-        deadzone = self.config.gestures.movement_deadzone
-
-        # Movement keys resolution
+        # 3. Movement displacement relative to neutral anchor (only if enabled)
         move_keys: Set[str] = set()
-        if dy < -deadzone:
-            move_keys.add(self.config.inputs.key_forward)  # W
-        elif dy > deadzone:
-            move_keys.add(self.config.inputs.key_backward) # S
+        if self.config.gestures.enable_wasd:
+            anchor_x = self.config.calibration.neutral_center_x
+            anchor_y = self.config.calibration.neutral_center_y
+            hand_x, hand_y = hand_data.palm_center_norm
 
-        if dx < -deadzone:
-            move_keys.add(self.config.inputs.key_left)     # A
-        elif dx > deadzone:
-            move_keys.add(self.config.inputs.key_right)    # D
+            dx = hand_x - anchor_x
+            dy = hand_y - anchor_y
+            deadzone = self.config.gestures.movement_deadzone
+
+            if dy < -deadzone:
+                move_keys.add(self.config.inputs.key_forward)  # W
+            elif dy > deadzone:
+                move_keys.add(self.config.inputs.key_backward) # S
+
+            if dx < -deadzone:
+                move_keys.add(self.config.inputs.key_left)     # A
+            elif dx > deadzone:
+                move_keys.add(self.config.inputs.key_right)    # D
+        else:
+            dx, dy = 0.0, 0.0
 
         # 4. Gesture Priority Arbiter: Fist > Pinch > Movement > Neutral
         if is_fist_pose:
@@ -353,7 +355,6 @@ class GestureStabilizer:
             self._prev_look_pos = curr_pos
             return 0.0, 0.0
 
-        # Invert dx because camera is horizontally mirrored
         delta_x = (curr_pos[0] - self._prev_look_pos[0])
         delta_y = (curr_pos[1] - self._prev_look_pos[1])
         self._prev_look_pos = curr_pos
@@ -364,9 +365,13 @@ class GestureStabilizer:
         if abs(delta_y) < cfg.deadzone:
             delta_y = 0.0
 
+        # Dynamic velocity acceleration: fast swipes get an acceleration boost
+        move_speed = math.hypot(delta_x, delta_y)
+        accel = getattr(cfg, "acceleration", 1.5) if move_speed > 0.012 else 1.0
+
         # Scale to screen pixels
-        pixel_dx = delta_x * cfg.sensitivity_x
-        pixel_dy = delta_y * cfg.sensitivity_y
+        pixel_dx = delta_x * cfg.sensitivity_x * accel
+        pixel_dy = delta_y * cfg.sensitivity_y * accel
 
         # Apply ADS multiplier when aiming for precision target acquisition
         if is_aiming:
@@ -379,8 +384,8 @@ class GestureStabilizer:
         self._smoothed_mouse_dy = alpha * self._smoothed_mouse_dy + (1.0 - alpha) * pixel_dy
 
         # Cut off near-zero residual drift
-        final_dx = self._smoothed_mouse_dx if abs(self._smoothed_mouse_dx) > 0.4 else 0.0
-        final_dy = self._smoothed_mouse_dy if abs(self._smoothed_mouse_dy) > 0.4 else 0.0
+        final_dx = self._smoothed_mouse_dx if abs(self._smoothed_mouse_dx) > 0.2 else 0.0
+        final_dy = self._smoothed_mouse_dy if abs(self._smoothed_mouse_dy) > 0.2 else 0.0
 
         return final_dx, final_dy
 
