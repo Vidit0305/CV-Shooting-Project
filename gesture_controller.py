@@ -142,8 +142,12 @@ class GestureRecognizer:
         return dist_3d / palm_scale
 
     def is_fist(self, lms: List[Point3D], finger_states: FingerStates, palm_scale: float) -> bool:
-        """Verify if the hand is in a closed fist pose."""
-        if not finger_states.are_four_folded():
+        """Verify if the hand is in a closed fist pose.
+        
+        Uses distance from fingertips to wrist and palm center, which is
+        robust to hand rotation and perspective tilt toward the camera.
+        """
+        if len(lms) < 21:
             return False
 
         wrist = lms[LandmarkIndex.WRIST]
@@ -165,7 +169,13 @@ class GestureRecognizer:
             for t, p in zip(tips, pips)
         ]
         avg_fold_ratio = sum(fold_ratios) / len(fold_ratios)
-        return avg_fold_ratio < self.config.gestures.fist_fold_ratio
+
+        # Also check tip distance to middle MCP (palm center)
+        mid_mcp = lms[LandmarkIndex.MIDDLE_MCP]
+        avg_dist_to_palm = sum(euclidean_distance_3d(lms[t], mid_mcp) for t in tips) / len(tips)
+        normalized_dist_to_palm = avg_dist_to_palm / max(0.01, palm_scale)
+
+        return (avg_fold_ratio < self.config.gestures.fist_fold_ratio) or (normalized_dist_to_palm < 0.70)
 
     def evaluate_raw(self, hand_data: HandData) -> Tuple[Gesture, float, FingerStates, Set[str], float, float]:
         """Classify single-frame raw gesture and movement keys."""
@@ -298,12 +308,15 @@ class GestureStabilizer:
         req_consecutive = self.config.stabilization.consecutive_activation_frames
         has_consecutive_support = self._consecutive_count >= req_consecutive
 
-        # Majority vote check
         counts = collections.Counter(self._gesture_history)
         majority_gesture, majority_count = counts.most_common(1)[0]
         majority_ratio = majority_count / len(self._gesture_history)
 
-        if has_consecutive_support and majority_gesture == raw_gesture and majority_ratio >= 0.50:
+        # Fast transition for shoot (Pinch) and aim (Fist)
+        if raw_gesture in (Gesture.PINCH, Gesture.FIST):
+            if self._consecutive_count >= 1:
+                self.current_stable_gesture = raw_gesture
+        elif has_consecutive_support and majority_gesture == raw_gesture:
             self.current_stable_gesture = raw_gesture
 
         shoot = (self.current_stable_gesture == Gesture.PINCH)

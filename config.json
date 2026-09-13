@@ -10,24 +10,24 @@
         "fps": 30
     },
     "tracking": {
-        "min_detection_confidence": 0.7,
-        "min_tracking_confidence": 0.6,
+        "min_detection_confidence": 0.65,
+        "min_tracking_confidence": 0.60,
         "max_num_hands": 1,
         "model_complexity": 1,
-        "smoothing_factor": 0.50
+        "smoothing_factor": 0.40
     },
     "gestures": {
-        "pinch_on_ratio": 0.35,
-        "pinch_off_ratio": 0.48,
-        "fist_fold_ratio": 0.85,
-        "movement_deadzone": 0.14,
+        "pinch_on_ratio": 0.52,
+        "pinch_off_ratio": 0.65,
+        "fist_fold_ratio": 0.88,
+        "movement_deadzone": 0.12,
         "tilt_threshold_deg": 25.0,
-        "finger_extension_ratio": 1.15,
-        "thumb_extension_ratio": 1.10
+        "finger_extension_ratio": 1.10,
+        "thumb_extension_ratio": 1.05
     },
     "stabilization": {
-        "voting_window_size": 7,
-        "consecutive_activation_frames": 3,
+        "voting_window_size": 5,
+        "consecutive_activation_frames": 2,
         "no_hand_grace_period_ms": 250
     },
     "inputs": {
@@ -38,7 +38,7 @@
         "mouse_shoot": "left",
         "mouse_aim": "right",
         "input_backend": "auto",
-        "controls_enabled_by_default": false,
+        "controls_enabled_by_default": true,
         "mouse_look": {
             "enabled": true,
             "sensitivity_x": 1400.0,
@@ -75,8 +75,8 @@
         "neutral_center_x": 0.5,
         "neutral_center_y": 0.55,
         "calibrated_palm_scale": 1.0,
-        "calibrated_pinch_on": 0.35,
-        "calibrated_pinch_off": 0.48,
+        "calibrated_pinch_on": 0.52,
+        "calibrated_pinch_off": 0.65,
         "is_calibrated": false
     }
 }

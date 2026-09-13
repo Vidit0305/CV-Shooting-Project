@@ -44,6 +44,10 @@ class InputController:
         self.pressed_keys: Set[str] = set()
         self.pressed_mouse_buttons: Set[str] = set()
 
+        # Sub-pixel mouse motion accumulator
+        self._mouse_accum_x: float = 0.0
+        self._mouse_accum_y: float = 0.0
+
         # Hardware backend initialization
         self._pynput_kbd: Optional[PynputKeyboardController] = None
         self._pynput_mouse: Optional[PynputMouseController] = None
@@ -81,20 +85,27 @@ class InputController:
     # --- Mouse Movement / Screen Look (Camera Steering) ---
 
     def move_mouse(self, delta_x: float, delta_y: float) -> None:
-        """Move the mouse cursor / in-game camera look relatively by (delta_x, delta_y) pixels."""
+        """Move the mouse cursor / in-game camera look relatively with sub-pixel preservation."""
         if not self.enabled:
             return
 
-        idx = int(round(delta_x))
-        idy = int(round(delta_y))
-        if idx == 0 and idy == 0:
+        self._mouse_accum_x += delta_x
+        self._mouse_accum_y += delta_y
+
+        step_x = int(round(self._mouse_accum_x))
+        step_y = int(round(self._mouse_accum_y))
+
+        if step_x == 0 and step_y == 0:
             return
+
+        self._mouse_accum_x -= step_x
+        self._mouse_accum_y -= step_y
 
         try:
             if self._pynput_mouse:
-                self._pynput_mouse.move(idx, idy)
+                self._pynput_mouse.move(step_x, step_y)
             elif PYAUTOGUI_AVAILABLE:
-                pyautogui.moveRel(idx, idy)
+                pyautogui.moveRel(step_x, step_y)
         except Exception as e:
             logger.error("Error moving mouse: %s", e)
 

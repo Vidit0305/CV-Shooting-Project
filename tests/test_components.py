@@ -138,8 +138,8 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.inputs.key_backward, "s")
         self.assertEqual(config.inputs.key_left, "a")
         self.assertEqual(config.inputs.key_right, "d")
-        self.assertFalse(config.inputs.controls_enabled_by_default)
-        self.assertAlmostEqual(config.gestures.pinch_on_ratio, 0.35)
+        self.assertTrue(config.inputs.controls_enabled_by_default)
+        self.assertAlmostEqual(config.gestures.pinch_on_ratio, 0.52)
 
 
 class TestGestureRecognition(unittest.TestCase):
@@ -268,10 +268,11 @@ class TestInputController(unittest.TestCase):
         self.controller.move_mouse(5.0, -5.0)
         self.controller.set_enabled(False)
 
-    def test_disabled_by_default(self):
-        self.assertFalse(self.controller.enabled)
-        # When disabled, pressing key updates internal state if called directly, but no OS crash
+    def test_controls_state_management(self):
+        self.assertTrue(self.controller.enabled)
+        # When disabled, keys can be released
         self.controller.set_enabled(False)
+        self.assertFalse(self.controller.enabled)
         self.controller.press_key("w")
         self.assertIn("w", self.controller.pressed_keys)
         self.controller.release_key("w")

@@ -55,28 +55,28 @@ class MouseLookConfig:
 @dataclass
 class GestureConfig:
     # Pinch thresholds (normalized distance: thumb_tip to index_tip / palm_scale)
-    # Hysteresis prevents flickering
-    pinch_on_ratio: float = 0.35
-    pinch_off_ratio: float = 0.48
+    # 0.52 triggers effortlessly on natural pinch; 0.65 releases when open
+    pinch_on_ratio: float = 0.52
+    pinch_off_ratio: float = 0.65
 
-    # Fist detection: all 4 fingers folded (tip distance from wrist / pip distance from wrist)
-    fist_fold_ratio: float = 0.85
+    # Fist detection: folded fingers ratio threshold
+    fist_fold_ratio: float = 0.88
 
     # WASD Movement: displacement from neutral anchor center [0.0 - 1.0 normalized]
-    movement_deadzone: float = 0.14
+    movement_deadzone: float = 0.12
     tilt_threshold_deg: float = 25.0
 
     # Minimum finger extension ratio (tip_dist / pip_dist from wrist)
-    finger_extension_ratio: float = 1.15
-    thumb_extension_ratio: float = 1.10
+    finger_extension_ratio: float = 1.10
+    thumb_extension_ratio: float = 1.05
 
 
 @dataclass
 class StabilizationConfig:
-    # Majority vote sliding window frame count
-    voting_window_size: int = 7
-    # Required consecutive matching frames for gesture state change
-    consecutive_activation_frames: int = 3
+    # Sliding window frame count
+    voting_window_size: int = 5
+    # Required consecutive matching frames for gesture state change (reduced for instant response)
+    consecutive_activation_frames: int = 2
     # Milliseconds grace period before releasing held inputs on tracking loss
     no_hand_grace_period_ms: int = 250
 
@@ -92,8 +92,8 @@ class InputConfig:
     mouse_aim: str = "right"
     # Backend: "auto", "pynput", or "pyautogui"
     input_backend: str = "auto"
-    # Safety: start with controls disabled
-    controls_enabled_by_default: bool = False
+    # Controls active immediately out-of-the-box
+    controls_enabled_by_default: bool = True
     mouse_look: MouseLookConfig = field(default_factory=MouseLookConfig)
 
 

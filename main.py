@@ -1,19 +1,30 @@
 """Main application entry point for the Computer Vision Gesture Shooting Controller.
 
 Orchestrates HD camera capture, MediaPipe hand tracking, geometric gesture recognition,
-mouse screen look / camera steering, OS input dispatching, and minimalist HUD rendering.
+mouse screen look / camera steering, OS input dispatching, global hotkeys, and borderless
+full-window edge-to-edge rendering with zero letterbox bars.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import platform
 import signal
+import subprocess
 import sys
-from typing import Optional
+import threading
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
+
+# Global hotkey listener via pynput
+try:
+    from pynput import keyboard as pynput_kbd
+    PYNPUT_KBD_AVAILABLE = True
+except ImportError:
+    PYNPUT_KBD_AVAILABLE = False
 
 from calibration import Calibrator
 from config import AppConfig
@@ -32,14 +43,50 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 
+def get_x11_window_size(win_name: str) -> Tuple[Optional[int], Optional[int]]:
+    """Query X11 window geometry using xwininfo to get true widget dimensions."""
+    if platform.system() != "Linux":
+        return None, None
+    try:
+        out = subprocess.check_output(["xwininfo", "-name", win_name], stderr=subprocess.DEVNULL, text=True)
+        w, h = None, None
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("Width:"):
+                w = int(line.split()[1])
+            elif line.startswith("Height:"):
+                h = int(line.split()[1])
+        return w, h
+    except Exception:
+        return None, None
+
+
+def fit_to_cover(frame: np.ndarray, target_w: int, target_h: int) -> np.ndarray:
+    """Scale and center-crop frame to fill target_w x target_h edge-to-edge with zero bars."""
+    fh, fw = frame.shape[:2]
+    if fw == target_w and fh == target_h:
+        return frame
+
+    scale = max(target_w / fw, target_h / fh)
+    scaled_w = int(round(fw * scale))
+    scaled_h = int(round(fh * scale))
+    resized = cv2.resize(frame, (scaled_w, scaled_h), interpolation=cv2.INTER_LINEAR)
+
+    crop_x = max(0, (scaled_w - target_w) // 2)
+    crop_y = max(0, (scaled_h - target_h) // 2)
+    return resized[crop_y : crop_y + target_h, crop_x : crop_x + target_w]
+
+
 class GestureShootingApp:
     """Main application lifecycle controller."""
 
-    def __init__(self, config_path: str = "config.json", debug: bool = False):
+    def __init__(self, config_path: str = "config.json", debug: bool = False, fullscreen: bool = False):
         self.config_path = config_path
         self.config = AppConfig.load(config_path)
         if debug:
             self.config.ui.show_debug = True
+        if fullscreen:
+            self.config.ui.fullscreen = True
 
         self.running: bool = False
         self.is_fullscreen: bool = self.config.ui.fullscreen
@@ -50,11 +97,32 @@ class GestureShootingApp:
         self.ui = UIRenderer(self.config)
         self.fps_counter = FPSCounter(self.config.ui.fps_smoothing_factor)
 
+        # Global hotkey listener
+        self._global_listener: Optional[pynput_kbd.Listener] = None
+
+        # Cached window dimensions
+        self._cached_win_w: int = self.config.camera.target_width
+        self._cached_win_h: int = self.config.camera.target_height
+        self._frame_count: int = 0
+
     def initialize(self) -> None:
-        """Initialize camera and hardware resources."""
+        """Initialize camera, global listener, and hardware resources."""
         logger.info("Initializing Gesture Shooting Controller...")
         self.tracker = HandTracker(self.config)
         self.running = True
+
+        # Ensure controls start active
+        self.input_ctrl.set_enabled(True)
+
+        # Start global keyboard listener so controls can be toggled even when in-game
+        if PYNPUT_KBD_AVAILABLE:
+            try:
+                self._global_listener = pynput_kbd.Listener(on_press=self._on_global_key_press)
+                self._global_listener.daemon = True
+                self._global_listener.start()
+                logger.info("Global background hotkey listener started successfully.")
+            except Exception as e:
+                logger.warning("Could not start global hotkey listener: %s", e)
 
         # Signal handlers for clean termination on SIGINT / SIGTERM
         signal.signal(signal.SIGINT, self._handle_signal)
@@ -65,22 +133,58 @@ class GestureShootingApp:
         logger.info("Received termination signal (%d). Shutting down safely...", signum)
         self.running = False
 
+    def _on_global_key_press(self, key) -> None:
+        """Handle global keyboard events from any focused application/game."""
+        try:
+            char = getattr(key, "char", None)
+            if char:
+                c = char.lower()
+                # Toggle controls with 'c'
+                if c == self.config.keybinds.key_toggle_controls.lower():
+                    new_state = self.input_ctrl.toggle_enabled()
+                    logger.info(">>> GLOBAL KEY [C] PRESSED -> Controls are now %s <<<",
+                                "ACTIVE (Live Game Input)" if new_state else "PAUSED")
+                # Emergency Stop with 'q'
+                elif c == self.config.keybinds.key_emergency_stop.lower():
+                    logger.info(">>> GLOBAL EMERGENCY STOP KEY [Q] PRESSED <<<")
+                    self.running = False
+                # Fullscreen with 'f'
+                elif c == self.config.keybinds.key_fullscreen.lower():
+                    self.toggle_fullscreen()
+                # Hide/Show HUD with 'h'
+                elif c == self.config.keybinds.key_toggle_hud.lower():
+                    self.config.ui.show_hud = not self.config.ui.show_hud
+                    logger.info("HUD Visibility: %s", self.config.ui.show_hud)
+            elif key == pynput_kbd.Key.esc:
+                logger.info(">>> GLOBAL EMERGENCY STOP KEY [ESC] PRESSED <<<")
+                self.running = False
+        except Exception:
+            pass
+
+    def toggle_fullscreen(self) -> None:
+        """Toggle between borderless fullscreen and windowed mode."""
+        self.is_fullscreen = not self.is_fullscreen
+        win_name = self.config.ui.window_name
+        prop = cv2.WINDOW_FULLSCREEN if self.is_fullscreen else cv2.WINDOW_NORMAL
+        cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, prop)
+        logger.info("Fullscreen Mode: %s", "ENABLED" if self.is_fullscreen else "WINDOWED")
+
     def run(self) -> None:
         """Run the main processing and rendering loop."""
         if not self.tracker:
             self.initialize()
 
         win_name = self.config.ui.window_name
-        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+        # Use GUI_NORMAL and FREERATIO to eliminate white toolbars and border padding
+        flags = cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_FREERATIO
+        cv2.namedWindow(win_name, flags)
         cv2.resizeWindow(win_name, self.tracker.frame_width, self.tracker.frame_height)
 
         if self.is_fullscreen:
             cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-        logger.info("Application loop started. Press '%s' to toggle controls, '%s' to quit, '%s' for fullscreen.",
-                    self.config.keybinds.key_toggle_controls.upper(),
-                    self.config.keybinds.key_emergency_stop.upper(),
-                    self.config.keybinds.key_fullscreen.upper())
+        logger.info("Application loop online. CONTROLS: ACTIVE by default.")
+        logger.info("Hotkeys (work globally): [C] Toggle Controls | [F] Fullscreen | [H] Toggle HUD | [Q / ESC] Quit")
 
         try:
             while self.running:
@@ -90,7 +194,15 @@ class GestureShootingApp:
                     cv2.waitKey(10)
                     continue
 
+                self._frame_count += 1
                 fps = self.fps_counter.update()
+
+                # Periodically query true window dimensions to eliminate all white/black letterboxing
+                if self._frame_count % 20 == 1:
+                    w_real, h_real = get_x11_window_size(win_name)
+                    if w_real and h_real and w_real > 100 and h_real > 100:
+                        self._cached_win_w = w_real
+                        self._cached_win_h = h_real
 
                 # 1. MediaPipe Hand Tracking (with landmark smoothing)
                 hand_data = self.tracker.process(frame)
@@ -114,19 +226,13 @@ class GestureShootingApp:
                 else:
                     self.input_ctrl.release_all_inputs()
 
-                # 5. Draw Minimalist Skeleton & Landmarks
-                if self.config.ui.show_landmarks and hand_data.detected and self.config.ui.show_hud:
-                    self.tracker.draw_landmarks(
-                        frame,
-                        hand_data,
-                        highlight_pinch=control_state.shoot,
-                        highlight_fist=control_state.aim,
-                    )
+                # 5. Fit camera frame to window edge-to-edge (zero black/white borders)
+                cover_frame = fit_to_cover(frame, self._cached_win_w, self._cached_win_h)
 
                 # 6. Render Floating Minimalist HUD
                 if self.config.ui.show_hud:
-                    rendered_frame = self.ui.render(
-                        frame=frame,
+                    display_frame = self.ui.render(
+                        frame=cover_frame,
                         hand_data=hand_data,
                         control_state=control_state,
                         controls_enabled=self.input_ctrl.enabled,
@@ -135,93 +241,55 @@ class GestureShootingApp:
                         debug_mode=self.config.ui.show_debug,
                     )
                 else:
-                    rendered_frame = frame
+                    display_frame = cover_frame
 
-                # 7. Aspect Ratio / Letterbox handling (Guarantees zero white borders)
-                final_display = self._fit_to_window(rendered_frame, win_name)
+                # 7. Display Frame Edge-to-Edge
+                cv2.imshow(win_name, display_frame)
 
-                # 8. Display Frame
-                cv2.imshow(win_name, final_display)
-
-                # 9. Check window close button (X)
+                # 8. Check window close button (X)
                 if cv2.getWindowProperty(win_name, cv2.WND_PROP_VISIBLE) < 1:
                     logger.info("Window close event detected.")
                     break
 
-                # 10. Handle Keypresses
+                # 9. Handle local window keypresses
                 key = cv2.waitKey(1) & 0xFF
                 if key != 255:
-                    self._handle_keypress(key, win_name)
+                    self._handle_local_keypress(key)
 
         except Exception as e:
             logger.error("Unhandled exception in main loop: %s", e, exc_info=True)
         finally:
             self.shutdown()
 
-    def _fit_to_window(self, frame: np.ndarray, win_name: str) -> np.ndarray:
-        """Pad and scale frame with deep black background to prevent OpenCV white pillarboxing."""
-        try:
-            rect = cv2.getWindowImageRect(win_name)
-            if rect and len(rect) >= 4:
-                _, _, win_w, win_h = rect
-                if win_w > 100 and win_h > 100:
-                    fh, fw = frame.shape[:2]
-                    scale = min(win_w / fw, win_h / fh)
-                    new_w = int(fw * scale)
-                    new_h = int(fh * scale)
-
-                    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-                    canvas = np.full((win_h, win_w, 3), (10, 10, 14), dtype=np.uint8)
-
-                    ox = (win_w - new_w) // 2
-                    oy = (win_h - new_h) // 2
-                    canvas[oy : oy + new_h, ox : ox + new_w] = resized
-                    return canvas
-        except Exception:
-            pass
-        return frame
-
-    def _handle_keypress(self, key: int, win_name: str) -> None:
-        """Process keyboard commands."""
-        # Emergency Stop / Exit
+    def _handle_local_keypress(self, key: int) -> None:
+        """Process keyboard commands when OpenCV window has focus."""
         if key == ord(self.config.keybinds.key_emergency_stop.lower()) or key == self.config.keybinds.key_escape_code:
-            logger.info("Emergency stop triggered via keypress.")
             self.running = False
-            return
-
-        # Toggle Game Controls Enabled / Disabled
-        if key == ord(self.config.keybinds.key_toggle_controls.lower()):
-            new_state = self.input_ctrl.toggle_enabled()
-            logger.info("Toggled Game Controls -> %s", "ACTIVE" if new_state else "PAUSED")
-
-        # Toggle Fullscreen Mode (F)
+        elif key == ord(self.config.keybinds.key_toggle_controls.lower()):
+            self.input_ctrl.toggle_enabled()
         elif key == ord(self.config.keybinds.key_fullscreen.lower()):
-            self.is_fullscreen = not self.is_fullscreen
-            prop = cv2.WINDOW_FULLSCREEN if self.is_fullscreen else cv2.WINDOW_NORMAL
-            cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, prop)
-            logger.info("Fullscreen Mode: %s", "ENABLED" if self.is_fullscreen else "WINDOWED")
-
-        # Toggle HUD Visibility (H)
+            self.toggle_fullscreen()
         elif key == ord(self.config.keybinds.key_toggle_hud.lower()):
             self.config.ui.show_hud = not self.config.ui.show_hud
-            logger.info("HUD Visibility: %s", self.config.ui.show_hud)
-
-        # Recalibrate Hand Geometry (R)
         elif key == ord(self.config.keybinds.key_calibrate.lower()):
             if not self.calibrator.is_active():
                 self.calibrator.start()
             else:
                 self.calibrator.cancel()
-
-        # Toggle Debug Metrics Overlay (D)
         elif key == ord(self.config.keybinds.key_toggle_debug.lower()):
             self.config.ui.show_debug = not self.config.ui.show_debug
-            logger.info("Debug overlay: %s", self.config.ui.show_debug)
 
     def shutdown(self) -> None:
         """Safely release all OS inputs and hardware resources."""
         logger.info("Shutting down Gesture Shooting Controller...")
         self.running = False
+
+        # Stop global keyboard listener
+        if self._global_listener and self._global_listener.is_alive():
+            try:
+                self._global_listener.stop()
+            except Exception:
+                pass
 
         # Guaranteed release of all pressed keys and mouse buttons
         try:
@@ -253,11 +321,9 @@ def main() -> None:
     parser.add_argument("--debug", action="store_true", help="Enable debug telemetry overlay")
     args = parser.parse_args()
 
-    app = GestureShootingApp(config_path=args.config, debug=args.debug)
+    app = GestureShootingApp(config_path=args.config, debug=args.debug, fullscreen=args.fullscreen)
     if args.camera is not None:
         app.config.camera.camera_index = args.camera
-    if args.fullscreen:
-        app.is_fullscreen = True
 
     app.initialize()
     app.run()
