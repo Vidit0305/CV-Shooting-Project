@@ -1,0 +1,82 @@
+{
+    "camera": {
+        "camera_index": 0,
+        "target_width": 1280,
+        "target_height": 720,
+        "fallback_width": 640,
+        "fallback_height": 480,
+        "fourcc": "MJPG",
+        "mirror_preview": true,
+        "fps": 30
+    },
+    "tracking": {
+        "min_detection_confidence": 0.7,
+        "min_tracking_confidence": 0.6,
+        "max_num_hands": 1,
+        "model_complexity": 1,
+        "smoothing_factor": 0.50
+    },
+    "gestures": {
+        "pinch_on_ratio": 0.35,
+        "pinch_off_ratio": 0.48,
+        "fist_fold_ratio": 0.85,
+        "movement_deadzone": 0.14,
+        "tilt_threshold_deg": 25.0,
+        "finger_extension_ratio": 1.15,
+        "thumb_extension_ratio": 1.10
+    },
+    "stabilization": {
+        "voting_window_size": 7,
+        "consecutive_activation_frames": 3,
+        "no_hand_grace_period_ms": 250
+    },
+    "inputs": {
+        "key_forward": "w",
+        "key_backward": "s",
+        "key_left": "a",
+        "key_right": "d",
+        "mouse_shoot": "left",
+        "mouse_aim": "right",
+        "input_backend": "auto",
+        "controls_enabled_by_default": false,
+        "mouse_look": {
+            "enabled": true,
+            "sensitivity_x": 1400.0,
+            "sensitivity_y": 1100.0,
+            "deadzone": 0.002,
+            "smoothing": 0.60,
+            "ads_multiplier": 0.50
+        }
+    },
+    "ui": {
+        "window_name": "Gesture Shooting Controller",
+        "fullscreen": false,
+        "show_hud": true,
+        "show_crosshair": true,
+        "show_landmarks": true,
+        "show_debug": false,
+        "fps_smoothing_factor": 0.9,
+        "theme_color_primary": [0, 255, 128],
+        "theme_color_cyan": [255, 220, 0],
+        "theme_color_danger": [60, 60, 255],
+        "theme_color_aim": [255, 140, 0],
+        "theme_color_warning": [0, 165, 255]
+    },
+    "keybinds": {
+        "key_toggle_controls": "c",
+        "key_fullscreen": "f",
+        "key_toggle_hud": "h",
+        "key_calibrate": "r",
+        "key_toggle_debug": "d",
+        "key_emergency_stop": "q",
+        "key_escape_code": 27
+    },
+    "calibration": {
+        "neutral_center_x": 0.5,
+        "neutral_center_y": 0.55,
+        "calibrated_palm_scale": 1.0,
+        "calibrated_pinch_on": 0.35,
+        "calibrated_pinch_off": 0.48,
+        "is_calibrated": false
+    }
+}
